@@ -1,10 +1,10 @@
 import csv
 import random
 import math
-import pandas as pd
+from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill
-from datetime import datetime
+from collections import defaultdict
 
 # --- Membaca Dataset dari file CSV ---
 def load_dataset(filename, split_ratio):
@@ -16,8 +16,8 @@ def load_dataset(filename, split_ratio):
             if len(row) < 6:
                 continue
             try:
-                features = [float(x) for x in row[1:5]]  # Kolom 2-5 sebagai fitur
-                label = row[5]  # Kolom ke-6 sebagai label
+                features = [float(x) for x in row[1:5]]  # Kolom fitur
+                label = row[5]  # Kolom label
                 dataset.append(features + [label])
             except ValueError:
                 continue
@@ -49,34 +49,61 @@ def calculate_accuracy(test_set, predictions):
     correct = sum(1 for i in range(len(test_set)) if test_set[i][-1] == predictions[i])
     return correct / len(test_set) * 100.0
 
-# --- Simpan Hasil ke Excel dengan warna ---
-def save_predictions_to_excel(test_set, predictions):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Hasil Prediksi"
+# --- Buat Confusion Matrix Manual ---
+def create_confusion_matrix(actual, predicted):
+    labels = sorted(set(actual + predicted))
+    matrix = {label: {l: 0 for l in labels} for label in labels}
+    for a, p in zip(actual, predicted):
+        matrix[a][p] += 1
+    return labels, matrix
 
-    headers = ['SepalLengthCm', 'SepalWidthCm', 'PetalLengthCm', 'PetalWidthCm', 'Actual', 'Predicted']
-    ws.append(headers)
+# --- Simpan Semua Hasil ke Excel ---
+def save_all_to_excel(test_set, predictions):
+    actual = [row[-1] for row in test_set]
+    predicted = predictions
+    labels, cmatrix = create_confusion_matrix(actual, predicted)
+
+    wb = Workbook()
+
+    # Sheet 1 - Hasil Prediksi
+    ws1 = wb.active
+    ws1.title = "Hasil Prediksi"
+    headers1 = ['SepalLengthCm', 'SepalWidthCm', 'PetalLengthCm', 'PetalWidthCm', 'Actual', 'Predicted']
+    ws1.append(headers1)
 
     fill_benar = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # hijau
     fill_salah = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # merah
 
     for i in range(len(test_set)):
         features = test_set[i][:-1]
-        actual = test_set[i][-1]
-        predicted = predictions[i]
-        row = features + [actual, predicted]
-        ws.append(row)
-
-        # Tandai baris dengan warna
+        a = actual[i]
+        p = predicted[i]
+        row = features + [a, p]
+        ws1.append(row)
         for col in range(1, 7):
-            ws.cell(row=i+2, column=col).fill = fill_benar if actual == predicted else fill_salah
+            ws1.cell(row=i+2, column=col).fill = fill_benar if a == p else fill_salah
 
-    # Simpan dengan nama berdasarkan waktu
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    filename = f'hasil_prediksi_{timestamp}.xlsx'
+    # Sheet 2 - Confusion Matrix
+    ws2 = wb.create_sheet(title="Confusion Matrix")
+    ws2.append([""] + labels)
+    for label in labels:
+        row = [label] + [cmatrix[label][l] for l in labels]
+        ws2.append(row)
+
+    # Sheet 3 - Statistik Per Kelas
+    ws3 = wb.create_sheet(title="Statistik Per Kelas")
+    ws3.append(["Kelas", "Jumlah Aktual", "True Positive", "Jumlah Diprediksi", "Akurasi (%)"])
+    for label in labels:
+        total_aktual = sum(cmatrix[label].values())
+        true_positive = cmatrix[label][label]
+        total_prediksi = sum(cmatrix[l][label] for l in labels)
+        akurasi = (true_positive / total_aktual) * 100 if total_aktual > 0 else 0
+        ws3.append([label, total_aktual, true_positive, total_prediksi, round(akurasi, 2)])
+
+    # Simpan file dengan nama tetap
+    filename = 'hasil_prediksi_iris.xlsx'
     wb.save(filename)
-    print(f"\n[INFO] Hasil prediksi disimpan ke file: {filename}")
+    print(f"\n[INFO] Hasil lengkap disimpan di: {filename}")
 
 # --- Fungsi Utama ---
 def main():
@@ -98,7 +125,7 @@ def main():
     accuracy = calculate_accuracy(testing_set, predictions)
     print(f'\nModel Accuracy: {accuracy:.2f}%')
 
-    save_predictions_to_excel(testing_set, predictions)
+    save_all_to_excel(testing_set, predictions)
 
 if __name__ == '__main__':
     main()
