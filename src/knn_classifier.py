@@ -44,10 +44,58 @@ def predict_classification(neighbors):
         votes[label] = votes.get(label, 0) + 1
     return sorted(votes.items(), key=lambda x: x[1], reverse=True)[0][0]
 
-# --- Hitung Akurasi ---
+# --- Hitung Metrik seluruh model ---
 def calculate_accuracy(test_set, predictions):
     correct = sum(1 for i in range(len(test_set)) if test_set[i][-1] == predictions[i])
     return correct / len(test_set) * 100.0
+
+def calculate_recall(test_set, predictions):
+    actual = [row[-1] for row in test_set]
+    labels = sorted(list(set(actual + predictions)))
+    recall_dict = {}
+    for label in labels:
+        true_pos = sum(1 for a, p in zip(actual, predictions) if a == label and p == label)
+        false_neg = sum(1 for a, p in zip(actual, predictions) if a == label and p != label)
+        denominator = true_pos + false_neg
+        recall = (true_pos / denominator * 100.0) if denominator > 0 else 0.0
+        recall_dict[label] = f"{recall:.2f}%"
+    return recall_dict
+
+def calculate_true_negative_rate(test_set, predictions):
+    actual = [row[-1] for row in test_set]
+    labels = sorted(list(set(actual + predictions)))
+    true_negatives = {}
+    for label in labels:
+        true_neg = sum(1 for a, p in zip(actual, predictions) if a != label and p != label)
+        total_negatives = sum(1 for a in actual if a != label)
+        true_negative_rate = (true_neg / total_negatives * 100.0) if total_negatives > 0 else 0.0
+        true_negatives[label] = f"{true_negative_rate:.2f}%"
+    return true_negatives
+
+def caluclate_f1_score(test_set, predictions):
+    precision = calculate_precision(test_set, predictions)
+    recall = calculate_recall(test_set, predictions)
+    f1_scores = {}
+    for label in precision:
+        p = float(precision[label].strip('%')) / 100.0
+        r = float(recall[label].strip('%')) / 100.0
+        if p + r > 0:
+            f1_scores[label] = f"{2 * (p * r) / (p + r) * 100:.2f}%"
+        else:
+            f1_scores[label] = "0.00%"
+    return f1_scores
+
+def calculate_precision(test_set, predictions):
+    actual = [row[-1] for row in test_set]
+    labels = sorted(list(set(actual + predictions)))
+    precision_dict = {}
+    for label in labels:
+        true_pos = sum(1 for a, p in zip(actual, predictions) if a == label and p == label)
+        false_pos = sum(1 for a, p in zip(actual, predictions) if a != label and p == label)
+        denominator = true_pos + false_pos
+        precision = (true_pos / denominator * 100.0) if denominator > 0 else 0.0
+        precision_dict[label] = f"{precision:.2f}%"
+    return precision_dict
 
 # --- Buat Confusion Matrix Manual ---
 def create_confusion_matrix(actual, predicted):
@@ -126,7 +174,7 @@ def predict_user_input(training_set, k):
 # --- Fungsi Utama ---
 def main():
     filename = 'Iris.csv'
-    split_ratio = 0.7
+    split_ratio = 0.7 # 70% data untuk training, 30% untuk testing
     k = 3
 
     training_set, testing_set = load_dataset(filename, split_ratio)
@@ -149,8 +197,37 @@ def main():
     accuracy = calculate_accuracy(testing_set, predictions) # Testing accuracy
     training_accuracy = calculate_accuracy(training_set, training_predictions)
 
-    print(f'\nTesting Accuracy: {accuracy:.2f}%')
-    print(f'Training Accuracy: {training_accuracy:.2f}%')
+    testing_recall = calculate_recall(testing_set, predictions)
+    training_recall = calculate_recall(training_set, training_predictions)
+
+    test_f1_scores = caluclate_f1_score(testing_set, predictions)
+    train_f1_scores = caluclate_f1_score(training_set, training_predictions)
+
+    test_true_negatives = calculate_true_negative_rate(testing_set, predictions)
+    train_true_negatives = calculate_true_negative_rate(training_set, training_predictions)
+
+    training_precision = calculate_precision(training_set, training_predictions)
+    testing_precision = calculate_precision(testing_set, predictions)
+
+    print(f'\n=== METRIK MODEL ===')
+    print(f'Testing Accuracy   : {accuracy:.2f}%')
+    print(f'Training Accuracy  : {training_accuracy:.2f}%')
+
+    print('\nRecall per kelas')
+    print('Testing Recall   :', ', '.join([f"{k}: {v}" for k, v in testing_recall.items()]))
+    print('Training Recall  :', ', '.join([f"{k}: {v}" for k, v in training_recall.items()]))
+
+    print('\nPrecision per kelas:')
+    print('Testing Precision :', ', '.join([f"{k}: {v}" for k, v in testing_precision.items()]))
+    print('Training Precision:', ', '.join([f"{k}: {v}" for k, v in training_precision.items()]))
+
+    print('\nSpecificity per kelas:')
+    print('Testing Specificity :', ', '.join([f"{k}: {v}" for k, v in test_true_negatives.items()]))
+    print('Training Specificity:', ', '.join([f"{k}: {v}" for k, v in train_true_negatives.items()]))
+
+    print('\nF1 Score per kelas:')
+    print('Testing F1 Score   :', ', '.join([f"{k}: {v}" for k, v in test_f1_scores.items()]))
+    print('Training F1 Score  :', ', '.join([f"{k}: {v}" for k, v in train_f1_scores.items()]))
 
     save_all_to_excel(testing_set, predictions)
 
