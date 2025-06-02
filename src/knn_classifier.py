@@ -105,6 +105,24 @@ def save_all_to_excel(test_set, predictions):
     wb.save(filename)
     print(f"\n[INFO] Hasil lengkap disimpan di: {filename}")
 
+def input_values():
+    try:
+        sepal_length = float(input("Masukkan Sepal Length (cm): "))
+        sepal_width = float(input("Masukkan Sepal Width (cm): "))
+        petal_length = float(input("Masukkan Petal Length (cm): "))
+        petal_width = float(input("Masukkan Petal Width (cm): "))
+        return [sepal_length, sepal_width, petal_length, petal_width]
+    except ValueError:
+        print("Input tidak valid. Silakan masukkan angka yang benar.")
+        return input_values()
+
+def predict_user_input(training_set, k):
+    user_input = input_values()
+    neighbors = get_neighbors(training_set, user_input + [''], k)
+    result = predict_classification(neighbors)
+    print(f'Kelas terprediksi untuk {user_input} adalah: {result}')
+    return result
+
 # --- Fungsi Utama ---
 def main():
     filename = 'Iris.csv'
@@ -122,10 +140,23 @@ def main():
         predictions.append(result)
         print(f'Predicted={result} \tActual={test[-1]}')
 
-    accuracy = calculate_accuracy(testing_set, predictions)
-    print(f'\nModel Accuracy: {accuracy:.2f}%')
+    training_predictions = []
+    for train in training_set:
+        neighbors = get_neighbors(training_set, train, k)
+        result = predict_classification(neighbors)
+        training_predictions.append(result)
+
+    accuracy = calculate_accuracy(testing_set, predictions) # Testing accuracy
+    training_accuracy = calculate_accuracy(training_set, training_predictions)
+
+    print(f'\nTesting Accuracy: {accuracy:.2f}%')
+    print(f'Training Accuracy: {training_accuracy:.2f}%')
 
     save_all_to_excel(testing_set, predictions)
+
+    print("Memprediksi input pengguna...")
+    user_prediction = predict_user_input(training_set, k)
+    print(f'Prediksi untuk input pengguna: {user_prediction}')
 
 if __name__ == '__main__':
     main()
